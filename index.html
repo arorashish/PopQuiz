@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Icertis Pop Quiz</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Confetti library for celebrations -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        /* Custom styles to match the brand and layout */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F0F0F0; /* lightGray */
+        }
+
+        /* Brand color variables for easier use in custom CSS */
+        :root {
+            --hero-blue: #010172;
+            --action-teal: #00E4BC;
+            --dark-gray: #303030;
+            --persian-blue: #2B38C2;
+            --dark-violet: #4C0173;
+            --cyan: #00C2E3;
+            --orange: #F3A712;
+        }
+
+        /* Gradient background for the header/start screen */
+        .brand-gradient {
+            background: linear-gradient(135deg, var(--hero-blue) 0%, var(--persian-blue) 50%, var(--dark-violet) 100%);
+        }
+
+        /* Glassmorphism effect for the start card */
+        .glass-effect {
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.08));
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            box-shadow: 0 20px 60px rgba(1, 1, 114, 0.25);
+        }
+
+        /* Custom styles for stepper icons */
+        .step-icon { color: rgba(255, 255, 255, 0.3); }
+        .step-icon.active, .step-icon.completed { color: var(--action-teal); }
+        .step-label { color: rgba(255, 255, 255, 0.5); }
+        .step-label.active, .step-label.completed { color: white; }
+
+        /* Dialog backdrop */
+        .dialog-backdrop {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+        
+        /* Custom scrollbar for leaderboard */
+        .leaderboard-list::-webkit-scrollbar {
+            width: 8px;
+        }
+        .leaderboard-list::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .leaderboard-list::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        .leaderboard-list::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <!-- Main application container -->
+    <div id="app-root"></div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        // Import necessary Firebase functions
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, addDoc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+        // --- Firebase Configuration ---
+        // IMPORTANT: Replace with your actual Firebase config.
+        const firebaseConfig = {
+          apiKey: "AIzaSyCajLlxvQUuvPp9Xths0cxvESfQl_NRDKQ",
+          authDomain: "pop-up-quiz-ea20f.firebaseapp.com",
+          projectId: "pop-up-quiz-ea20f",
+          storageBucket: "pop-up-quiz-ea20f.firebasestorage.app",
+          messagingSenderId: "464170380956",
+          appId: "1:464170380956:web:14b27dddf28ed2a60b4759",
+          measurementId: "G-N9GQLCPS58",
+        };
+
+        // --- Initialize Firebase ---
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        // --- Brand Palette ---
+        const brand = {
+            heroBlue: "#010172",
+            actionTeal: "#00E4BC",
+            darkGray: "#303030",
+            persianBlue: "#2B38C2",
+            darkViolet: "#4C0173",
+        };
+
+        // --- Default Quiz Data ---
+        const defaultQuizItems = [
+            { id: 1, type: "multiple-choice", q: "Can the Icertis platform be set up to prevent contract creation based on user-entered values?", options: ["Yes, with the right logic", "No, contracts can’t be blocked", "Only for NDA templates", "Only after legal approval"], answerIndex: 0 },
+            { id: 2, type: "multiple-choice", q: "Can the Icertis platform schedule Power BI reports to be emailed regularly to executives?", options: ["Yes", "No", "Only via Excel", "Only if manually shared"], answerIndex: 0 },
+            { id: 3, type: "multiple-choice", q: "Can a contract owner create ad hoc tasks and assign them to project team members?", options: ["Yes, using Task Planner", "No, only admins can assign", "Only after approval", "Only with external users"], answerIndex: 0 },
+            { id: 4, type: "multiple-choice", q: "If the contract owner needs input from the Project Team on a specific clause during negotiation, can they create an ad hoc task and assign it to the relevant team members through the system?", options: ["Yes, immediately", "No, only after it’s published", "Only for draft contracts", "Only if tagged confidential"], answerIndex: 1 },
+            { id: 5, type: "multiple-choice", q: "What editing tool does Icertis provide that allows users to collaborate in real time on contract documents directly within the platform?", options: ["Broadcast", "Online Collaboration", "Sent for Review", "Co-authoring Plugin"], answerIndex: 1 },
+            { id: 6, type: "multiple-choice", q: "Can users approve contracts directly from email , without logging into the Icertis platform", options: ["Yes, with actionable email", "No, must log in", "Only via mobile", "Only after negotiation"], answerIndex: 0 },
+            { id: 7, type: "multiple-choice", q: "What do Approval Rules do in the Icertis platform?", options: ["Style contract headers", "Assign reviewers", "Decide who approves what", "Secure the contract"], answerIndex: 2 },
+            { id: 8, type: "multiple-choice", q: "If a contract is awaiting signature and the signatory hasn’t responded within the expected timeline, can the contract owner send a system-generated reminder to prompt action?", options: ["Yes, using “Remind Signatory”", "No, reminders must be emailed", "Only compliance can nudge", "Only for MSAs"], answerIndex: 0 },
+            { id: 9, type: "multiple-choice", q: "Can the Icertis platform assemble documents that include endnotes in templates or clauses?", options: ["Yes", "No", "Only footnotes allowed", "Only in offline Word"], answerIndex: 0 },
+            { id: 10, type: "multiple-choice", q: "Can external users (e.g., vendors) edit contract documents online?", options: ["Yes, with the right permissions", "No, internal users only", "Only during redlining", "Only after signature"], answerIndex: 0 },
+        ];
+        
+        // --- Application State ---
+        let state = {
+            user: null,
+            quizItems: [...defaultQuizItems],
+            leaderboardData: [],
+            started: false,
+            viewMode: 'audience', // 'audience', 'presenter', 'author'
+            authPrompt: { open: false, mode: '' },
+            index: 0,
+            selections: Array(defaultQuizItems.length).fill(null),
+            soundOn: true,
+            playerName: '',
+            displayName: '',
+            playerEmail: '',
+            snack: { open: false, msg: '', severity: 'success' },
+            lbOpen: false,
+            scoreDialogOpen: false,
+            confettiFire: false,
+            confirmResetOpen: false, // State for reset confirmation dialog
+        };
+
+        // --- Utility Functions ---
+        const A = (i) => String.fromCharCode(65 + i);
+        const identity = (n) => Array.from({ length: n }, (_, i) => i);
+        let audioCtx;
+        const playSound = (freq = 660, dur = 0.15) => {
+            if (!state.soundOn) return;
+            if (!audioCtx) {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (AudioCtx) audioCtx = new AudioCtx();
+                else return;
+            }
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            const now = audioCtx.currentTime;
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(freq, now);
+            gain.gain.setValueAtTime(0.0001, now);
+            gain.gain.exponentialRampToValueAtTime(0.03, now + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now);
+            osc.stop(now + dur + 0.05);
+        };
+        const sha256Hex = async (str) => {
+            const data = new TextEncoder().encode(str);
+            const hash = await window.crypto.subtle.digest("SHA-256", data);
+            return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+        };
+        const PRES_KEY_SHA = "412b16588c735d4745101037803a55734265436873138407886432850325f626";
+
+        // --- DOM References ---
+        const appRoot = document.getElementById('app-root');
+
+        // --- Rendering Engine ---
+        // This function is the heart of the UI. It redraws the app based on the current state.
+        function render() {
+            const { started, viewMode } = state;
+
+            if (viewMode === 'author') {
+                appRoot.innerHTML = renderAuthorView();
+            } else if (!started) {
+                appRoot.innerHTML = renderStartScreen();
+            } else {
+                appRoot.innerHTML = renderQuizInterface();
+            }
+            
+            // Render dialogs on top if they are open
+            if (state.lbOpen) appRoot.insertAdjacentHTML('beforeend', renderLeaderboardDialog());
+            if (state.scoreDialogOpen) appRoot.insertAdjacentHTML('beforeend', renderScoreDialog());
+            if (state.authPrompt.open) appRoot.insertAdjacentHTML('beforeend', renderPasswordDialog());
+            if (state.confirmResetOpen) appRoot.insertAdjacentHTML('beforeend', renderConfirmResetDialog());
+            if (state.snack.open) showSnackbar();
+            
+            addEventListeners();
+        }
+
+        // --- Component Renderers (return HTML strings) ---
+        
+        function renderStartScreen() {
+            return `
+                <div class="brand-gradient text-white min-h-screen grid place-items-center p-4">
+                    <div class="relative z-10 w-full max-w-md p-6 sm:p-8 glass-effect rounded-3xl">
+                        <div class="space-y-4">
+                            <h1 class="text-4xl font-extrabold mb-4">Icertis Pop Quiz</h1>
+                            <p class="opacity-90">Enter your details to begin. Use your real name for the leaderboard.</p>
+                            <input id="player-name-input" type="text" placeholder="Name" class="w-full p-3 rounded-2xl text-gray-800" value="${state.playerName}">
+                            <input id="player-email-input" type="email" placeholder="Email (optional)" class="w-full p-3 rounded-2xl text-gray-800" value="${state.playerEmail}">
+                            <div class="flex items-center justify-between pt-2">
+                                <label class="flex items-center space-x-2 cursor-pointer">
+                                    <input type="checkbox" id="sound-toggle" class="hidden peer" ${state.soundOn ? 'checked' : ''}>
+                                    <div class="w-12 h-6 rounded-full bg-white/30 peer-checked:bg-[var(--action-teal)] relative transition">
+                                        <div class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform transform peer-checked:translate-x-6"></div>
+                                    </div>
+                                    <span>Sound ${state.soundOn ? 'On' : 'Off'}</span>
+                                </label>
+                                <button id="start-btn" class="bg-[var(--action-teal)] text-gray-800 font-bold py-3 px-6 rounded-2xl shadow-lg hover:brightness-110 transition">Begin</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderQuizInterface() {
+            const total = state.quizItems.length;
+            const progress = (state.index / total) * 100;
+            const current = state.quizItems[state.index];
+            const finished = state.selections.every(s => s !== null);
+
+            return `
+                <div class="brand-gradient text-white pt-4 pb-8 mb-4">
+                    <div class="container mx-auto px-4 max-w-4xl">
+                        <!-- Header -->
+                        <div class="flex justify-end items-center mb-4 h-10">
+                            <div class="flex items-center space-x-2">
+                                <label class="flex items-center space-x-2 cursor-pointer">
+                                    <input type="checkbox" id="sound-toggle" class="hidden peer" ${state.soundOn ? 'checked' : ''}>
+                                    <div class="w-12 h-6 rounded-full bg-white/30 peer-checked:bg-[var(--action-teal)] relative transition">
+                                        <div class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform transform peer-checked:translate-x-6"></div>
+                                    </div>
+                                </label>
+                                <button id="restart-btn" title="Restart" class="text-[var(--action-teal)] text-2xl">↻</button>
+                            </div>
+                        </div>
+                        <!-- Title & Info -->
+                        <h1 class="text-5xl font-extrabold leading-tight">Icertis Pop Quiz</h1>
+                        <div class="mt-2 inline-block bg-[var(--action-teal)] text-gray-800 text-sm font-bold px-3 py-1 rounded-full">
+                            Player: ${state.displayName} • Mode: ${state.viewMode}
+                        </div>
+                        <!-- Progress & Stepper -->
+                        <div class="mt-6">
+                            <div class="w-full bg-white/25 rounded-full h-2.5">
+                                <div class="bg-[var(--action-teal)] h-2.5 rounded-full" style="width: ${progress}%"></div>
+                            </div>
+                            <div class="flex justify-between mt-2">
+                                ${state.quizItems.map((_, idx) => `
+                                    <div class="flex flex-col items-center">
+                                        <div class="step-icon ${idx === state.index ? 'active' : ''} ${state.selections[idx] !== null ? 'completed' : ''}">●</div>
+                                        <div class="step-label text-xs mt-1 ${idx === state.index ? 'active' : ''} ${state.selections[idx] !== null ? 'completed' : ''}">Q${idx + 1}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="container mx-auto px-4 max-w-4xl pb-8">
+                    <div class="bg-white rounded-3xl shadow-2xl p-6">
+                        ${state.viewMode === 'presenter' ? renderPresenterCardContent(current) : renderAudienceCardContent(current)}
+                        
+                        <!-- Actions -->
+                        <div class="flex justify-between items-center mt-6 pt-4 border-t">
+                            <p class="text-sm text-gray-500">
+                                ${state.viewMode === 'presenter' ? 'Use Previous/Next to navigate slides' : (finished ? 'All questions answered!' : 'Choose an option to proceed.')}
+                            </p>
+                            <div class="flex space-x-2">
+                                <button id="prev-btn" class="font-bold py-2 px-4 rounded-xl border border-gray-300 hover:bg-gray-100 transition disabled:opacity-50" ${state.index === 0 ? 'disabled' : ''}>Previous</button>
+                                ${renderNextButton()}
+                            </div>
+                        </div>
+                    </div>
+                    ${state.viewMode === 'presenter' && state.index >= total -1 ? renderPresenterAnswers() : ''}
+                </div>
+            `;
+        }
+        
+        function renderPresenterAnswers() {
+            return `
+                <div class="bg-white rounded-3xl shadow-2xl p-6 mt-4">
+                    <h2 class="text-2xl font-bold mb-4">Quiz Answers</h2>
+                    <div class="space-y-2">
+                        ${state.quizItems.map((q, n) => `
+                            <div class="border rounded-xl p-3">
+                                <p class="font-bold">Q${n + 1}. ${q.q}</p>
+                                <p class="text-sm text-gray-600 mt-1">
+                                    Correct Answer: <b style="color: var(--action-teal);">${A(q.answerIndex)}) ${q.options[q.answerIndex]}</b>
+                                </p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderNextButton() {
+            const total = state.quizItems.length;
+            if (state.viewMode === 'audience') {
+                if (state.index < total - 1) {
+                    return `<button id="next-btn" class="font-bold py-2 px-4 rounded-xl bg-[var(--action-teal)] text-gray-800 transition disabled:opacity-50 disabled:bg-gray-200" ${state.selections[state.index] === null ? 'disabled' : ''}>Next</button>`;
+                } else {
+                    return `<button id="finish-btn" class="font-bold py-2 px-4 rounded-xl bg-[var(--action-teal)] text-gray-800 transition">Finish</button>`;
+                }
+            } else { // Presenter mode
+                return `<button id="next-btn" class="font-bold py-2 px-4 rounded-xl bg-[var(--action-teal)] text-gray-800 transition disabled:opacity-50" ${state.index >= total - 1 ? 'disabled' : ''}>Next</button>`;
+            }
+        }
+
+        function renderPresenterCardContent(current) {
+            return `
+                <div class="flex justify-between items-center">
+                    <span class="bg-blue-100 text-blue-800 text-sm font-bold px-3 py-1 rounded-full">Slide ${state.index + 1} of ${state.quizItems.length}</span>
+                    <button id="show-lb-btn" class="font-bold py-2 px-4 rounded-xl border border-gray-300 hover:bg-gray-100 transition">🏆 Show Leaderboard</button>
+                </div>
+                <h2 class="text-3xl font-extrabold my-4">${current.q}</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    ${current.options.map((opt, i) => `
+                        <div class="p-4 border-2 rounded-2xl min-h-[84px] flex items-center text-left text-gray-500">
+                            ${A(i)}) ${opt}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderAudienceCardContent(current) {
+            return `
+                <div>
+                    <span class="bg-blue-100 text-blue-800 text-sm font-bold px-3 py-1 rounded-full">Question ${state.index + 1} of ${state.quizItems.length}</span>
+                </div>
+                <h2 class="text-2xl font-bold my-4">${current.q}</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    ${current.options.map((opt, i) => {
+                        const isSelected = state.selections[state.index] === i;
+                        return `
+                        <button data-option-index="${i}" class="option-btn p-4 border-2 rounded-2xl min-h-[84px] text-left transition ${isSelected ? 'bg-[var(--action-teal)] text-gray-800 border-[var(--action-teal)]' : 'border-gray-300 hover:border-gray-500'}">
+                            ${A(i)}) ${opt}
+                        </button>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+        
+        function renderLeaderboardDialog() {
+            const items = [...state.leaderboardData].sort((a, b) => b.score - a.score || a.ts - b.ts);
+            return `
+                <div id="lb-dialog" class="dialog-backdrop">
+                    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md m-4">
+                        <div class="p-4 text-center text-white rounded-t-2xl brand-gradient">
+                            <h2 class="text-2xl font-bold">🏆 Leaderboard</h2>
+                        </div>
+                        <div class="p-4 max-h-[60vh] overflow-y-auto leaderboard-list">
+                            ${items.length === 0 ? '<p class="text-center py-8">No entries yet. Be the first!</p>' : ''}
+                            <ul class="divide-y">
+                                ${items.slice(0, 3).map(r => `
+                                    <li class="py-3 flex justify-center items-center">
+                                        <span class="font-semibold text-lg">${r.name || 'Anonymous'}</span>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                         <div class="p-4 text-right border-t">
+                            <button id="close-lb-btn" class="font-bold py-2 px-4 rounded-xl bg-gray-200 hover:bg-gray-300 transition">Close</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderScoreDialog() {
+            return `
+                <div id="score-dialog" class="dialog-backdrop">
+                    <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm m-4 p-8 text-center">
+                        <h2 class="text-2xl font-bold mb-2">Quiz Complete!</h2>
+                        <p>Thank you for participating.</p>
+                        <button id="close-score-btn" class="mt-6 font-bold py-2 px-6 rounded-xl bg-gray-800 text-white hover:bg-gray-700 transition">Close</button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderPasswordDialog() {
+             return `
+                <div id="password-dialog" class="dialog-backdrop">
+                    <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm m-4 p-6">
+                        <h2 class="text-xl font-bold mb-4">Authorization Required</h2>
+                        <input id="password-input" type="password" placeholder="Password" class="w-full p-2 border rounded-lg">
+                        <p id="password-error" class="text-red-500 text-sm mt-1 h-4"></p>
+                        <div class="flex justify-end space-x-2 mt-4">
+                            <button id="cancel-auth-btn" class="font-bold py-2 px-4 rounded-xl bg-gray-200 hover:bg-gray-300 transition">Cancel</button>
+                            <button id="unlock-auth-btn" class="font-bold py-2 px-4 rounded-xl bg-gray-800 text-white hover:bg-gray-700 transition">Unlock</button>
+                        </div>
+                    </div>
+                </div>
+             `;
+        }
+
+        function renderConfirmResetDialog() {
+            return `
+                <div id="confirm-reset-dialog" class="dialog-backdrop">
+                    <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm m-4 p-6">
+                        <h2 class="text-xl font-bold mb-2">Reset Leaderboard?</h2>
+                        <p class="text-gray-600">This action is irreversible and will delete all leaderboard entries.</p>
+                        <div class="flex justify-end space-x-2 mt-4">
+                            <button id="cancel-reset-btn" class="font-bold py-2 px-4 rounded-xl bg-gray-200 hover:bg-gray-300 transition">Cancel</button>
+                            <button id="confirm-reset-btn" class="font-bold py-2 px-4 rounded-xl bg-red-600 text-white hover:bg-red-700 transition">Reset</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAuthorView() {
+            return `
+                <div class="container mx-auto p-4">
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h1 class="text-3xl font-bold">Authoring Mode</h1>
+                            <button id="exit-author-btn" class="font-bold py-2 px-4 rounded-xl border hover:bg-gray-100">Exit Author Mode</button>
+                        </div>
+                        <p class="mb-4">Live editing is enabled. Changes are saved automatically.</p>
+                        <div id="questions-editor" class="space-y-4">
+                            ${state.quizItems.map((item, qIndex) => `
+                                <div class="border rounded-lg p-4">
+                                    <div class="flex items-center space-x-2">
+                                        <label class="font-bold">Q${qIndex + 1}</label>
+                                        <input data-q-index="${qIndex}" class="question-text-input w-full p-1 border-b" value="${item.q}">
+                                        <button data-q-index="${qIndex}" class="delete-question-btn text-red-500 text-2xl">&times;</button>
+                                    </div>
+                                    <div class="pl-6 mt-2 space-y-2">
+                                        ${item.options.map((opt, oIndex) => `
+                                            <div class="flex items-center space-x-2">
+                                                <input type="radio" name="answer-${qIndex}" data-q-index="${qIndex}" data-o-index="${oIndex}" class="answer-radio" ${item.answerIndex === oIndex ? 'checked' : ''}>
+                                                <input data-q-index="${qIndex}" data-o-index="${oIndex}" class="option-text-input w-full p-1 border-b" value="${opt}">
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button id="add-question-btn" class="mt-4 w-full font-bold py-3 px-4 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition">Add New Question</button>
+                        
+                        <div class="border rounded-lg p-4 mt-6">
+                            <h2 class="font-bold text-lg mb-2">Manage Leaderboard</h2>
+                            <button id="reset-lb-btn" class="font-bold py-2 px-4 rounded-xl bg-red-600 text-white hover:bg-red-700 transition">Reset Leaderboard</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- Event Handling ---
+        function addEventListeners() {
+            // Start Screen
+            document.getElementById('start-btn')?.addEventListener('click', handleStart);
+            document.getElementById('player-name-input')?.addEventListener('input', (e) => state.playerName = e.target.value);
+            document.getElementById('player-email-input')?.addEventListener('input', (e) => state.playerEmail = e.target.value);
+
+            // Global controls
+            document.getElementById('sound-toggle')?.addEventListener('change', (e) => {
+                state.soundOn = e.target.checked;
+                render(); // Re-render to update label
+            });
+            document.getElementById('restart-btn')?.addEventListener('click', handleRestart);
+
+            // Quiz Navigation
+            document.getElementById('prev-btn')?.addEventListener('click', goPrev);
+            document.getElementById('next-btn')?.addEventListener('click', goNext);
+            document.getElementById('finish-btn')?.addEventListener('click', handleFinish);
+            document.querySelectorAll('.option-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => selectOption(parseInt(e.currentTarget.dataset.optionIndex)));
+            });
+
+            // Dialogs
+            document.getElementById('show-lb-btn')?.addEventListener('click', () => { state.lbOpen = true; render(); });
+            document.getElementById('close-lb-btn')?.addEventListener('click', () => { state.lbOpen = false; render(); });
+            document.getElementById('lb-dialog')?.addEventListener('click', (e) => { if (e.target.id === 'lb-dialog') { state.lbOpen = false; render(); }});
+            document.getElementById('close-score-btn')?.addEventListener('click', () => { state.scoreDialogOpen = false; render(); });
+            document.getElementById('score-dialog')?.addEventListener('click', (e) => { if (e.target.id === 'score-dialog') { state.scoreDialogOpen = false; render(); }});
+            
+            // Password Dialog
+            document.getElementById('cancel-auth-btn')?.addEventListener('click', () => { state.authPrompt.open = false; render(); });
+            document.getElementById('unlock-auth-btn')?.addEventListener('click', handlePasswordCheck);
+            document.getElementById('password-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') handlePasswordCheck(); });
+
+            // Author View
+            document.getElementById('exit-author-btn')?.addEventListener('click', () => {
+                state.viewMode = 'audience';
+                window.location.hash = '';
+                render();
+            });
+            document.querySelectorAll('.question-text-input').forEach(input => input.addEventListener('change', handleAuthorInputChange));
+            document.querySelectorAll('.option-text-input').forEach(input => input.addEventListener('change', handleAuthorInputChange));
+            document.querySelectorAll('.answer-radio').forEach(radio => radio.addEventListener('change', handleAuthorInputChange));
+            document.querySelectorAll('.delete-question-btn').forEach(btn => btn.addEventListener('click', handleAuthorDeleteQuestion));
+            document.getElementById('add-question-btn')?.addEventListener('click', handleAuthorAddQuestion);
+            document.getElementById('reset-lb-btn')?.addEventListener('click', () => {
+                state.confirmResetOpen = true;
+                render();
+            });
+            document.getElementById('cancel-reset-btn')?.addEventListener('click', () => {
+                state.confirmResetOpen = false;
+                render();
+            });
+            document.getElementById('confirm-reset-btn')?.addEventListener('click', resetLeaderboard);
+        }
+        
+        // --- Logic Functions ---
+        
+        async function handleStart() {
+            const name = state.playerName.trim();
+            if (!name) {
+                showSnackbar("Please enter your name.", "error");
+                return;
+            }
+            let mode = "audience";
+            let finalDisplayName = name;
+            
+            const digest = await sha256Hex(name);
+            if (digest === PRES_KEY_SHA || name === "IcertisPresenter@1") {
+                mode = "presenter";
+                finalDisplayName = "Presenter";
+            }
+            
+            state.displayName = finalDisplayName;
+            state.viewMode = mode;
+            state.started = true;
+            state.confettiFire = false;
+            resetQuizState();
+            render();
+        }
+        
+        function handleRestart() {
+            Object.assign(state, {
+                started: false,
+                playerName: '',
+                playerEmail: '',
+                displayName: '',
+                viewMode: 'audience',
+                confettiFire: false
+            });
+            resetQuizState();
+            render();
+        }
+
+        function resetQuizState() {
+            state.index = 0;
+            state.selections = Array(state.quizItems.length).fill(null);
+        }
+        
+        function selectOption(optionIndex) {
+            playSound(520, 0.12);
+            state.selections[state.index] = optionIndex;
+            render();
+        }
+        
+        function goNext() {
+            if (state.index < state.quizItems.length - 1) {
+                state.index++;
+                render();
+            }
+        }
+        
+        function goPrev() {
+            if (state.index > 0) {
+                state.index--;
+                render();
+            }
+        }
+        
+        function handleFinish() {
+            const finished = state.selections.every(s => s !== null);
+            if (finished) {
+                submitToLeaderboard();
+                state.confettiFire = true;
+                fireConfetti();
+                state.scoreDialogOpen = true;
+                render();
+            } else {
+                showSnackbar("Please answer all questions before finishing.", "warning");
+            }
+        }
+
+        async function submitToLeaderboard() {
+            if (!state.user) return;
+            const finalScore = state.selections.reduce((acc, sel, qi) => acc + (state.quizItems[qi]?.answerIndex === sel ? 1 : 0), 0);
+            await addDoc(collection(db, "leaderboard"), {
+                name: state.playerName || "Anonymous",
+                score: finalScore,
+                total: state.quizItems.length,
+                ts: Date.now(),
+                userId: state.user.uid,
+            });
+            showSnackbar("Submitted to leaderboard!", "success");
+        }
+        
+        function fireConfetti() {
+            if (typeof confetti !== 'function') return;
+            const duration = 3 * 1000;
+            const animationEnd = Date.now() + duration;
+            const brandColors = Object.values(brand);
+            
+            const interval = setInterval(() => {
+                const timeLeft = animationEnd - Date.now();
+                if (timeLeft <= 0) return clearInterval(interval);
+                
+                const particleCount = 50 * (timeLeft / duration);
+                confetti({ particleCount, startVelocity: 30, spread: 360, origin: { x: Math.random(), y: Math.random() - 0.2 }, colors: brandColors });
+            }, 250);
+        }
+        
+        function showSnackbar(msg, severity = 'success') {
+            state.snack = { open: true, msg, severity };
+            
+            let snackbar = document.getElementById('snackbar');
+            if (snackbar) snackbar.remove();
+
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                warning: 'bg-yellow-500',
+                info: 'bg-blue-500'
+            };
+
+            document.body.insertAdjacentHTML('beforeend', `
+                <div id="snackbar" class="fixed bottom-5 left-1/2 -translate-x-1/2 px-6 py-3 rounded-lg text-white shadow-lg ${colors[severity]}">
+                    ${msg}
+                </div>
+            `);
+            
+            setTimeout(() => {
+                document.getElementById('snackbar')?.remove();
+                state.snack.open = false;
+            }, 3000);
+        }
+
+        function handlePasswordCheck() {
+            const password = document.getElementById('password-input').value;
+            if (password === "P@55w0rd") {
+                state.viewMode = state.authPrompt.mode;
+                state.authPrompt.open = false;
+                render();
+            } else {
+                const errorEl = document.getElementById('password-error');
+                if (errorEl) errorEl.textContent = "Incorrect password";
+            }
+        }
+
+        // --- Authoring Logic ---
+        async function updateQuizInFirestore(newItems) {
+            const quizDocRef = doc(db, "quizzes", "mainQuiz");
+            await setDoc(quizDocRef, { questions: newItems });
+            // The onSnapshot listener will automatically update the state and re-render
+        }
+
+        async function resetLeaderboard() {
+            const leaderboardColRef = collection(db, "leaderboard");
+            const querySnapshot = await getDocs(leaderboardColRef);
+            const batch = writeBatch(db);
+            querySnapshot.forEach((doc) => batch.delete(doc.ref));
+            await batch.commit();
+            state.confirmResetOpen = false;
+            showSnackbar("Leaderboard has been reset.", "success");
+            render();
+        }
+
+        function handleAuthorInputChange(e) {
+            const newItems = JSON.parse(JSON.stringify(state.quizItems)); // Deep copy
+            const { qIndex, oIndex } = e.target.dataset;
+            
+            if (e.target.classList.contains('question-text-input')) {
+                newItems[qIndex].q = e.target.value;
+            } else if (e.target.classList.contains('option-text-input')) {
+                newItems[qIndex].options[oIndex] = e.target.value;
+            } else if (e.target.classList.contains('answer-radio')) {
+                newItems[qIndex].answerIndex = parseInt(oIndex, 10);
+            }
+            
+            updateQuizInFirestore(newItems);
+        }
+        
+        function handleAuthorDeleteQuestion(e) {
+            const { qIndex } = e.target.dataset;
+            const newItems = state.quizItems.filter((_, i) => i !== parseInt(qIndex, 10));
+            updateQuizInFirestore(newItems);
+        }
+
+        function handleAuthorAddQuestion() {
+            const newItems = [
+                ...state.quizItems,
+                { id: Date.now(), type: "multiple-choice", q: "New Question?", options: ["Option A", "Option B"], answerIndex: 0 }
+            ];
+            updateQuizInFirestore(newItems);
+        }
+
+        // --- Initial Setup ---
+        function initializeAppListeners() {
+            // Firebase Auth
+            onAuthStateChanged(auth, (currentUser) => {
+                if (currentUser) {
+                    state.user = currentUser;
+                } else {
+                    signInAnonymously(auth).catch(console.error);
+                }
+            });
+
+            // Firestore Quiz Data
+            const quizDocRef = doc(db, "quizzes", "mainQuiz");
+            onSnapshot(quizDocRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    state.quizItems = docSnap.data().questions;
+                } else {
+                    setDoc(quizDocRef, { questions: defaultQuizItems });
+                }
+                resetQuizState();
+                render();
+            });
+
+            // Firestore Leaderboard Data
+            const leaderboardColRef = collection(db, "leaderboard");
+            onSnapshot(leaderboardColRef, (querySnapshot) => {
+                state.leaderboardData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+                if (state.lbOpen) render(); // Re-render dialog if it's open
+            });
+            
+            // URL Hash and Keyboard shortcuts for Author Mode
+            const checkAuthorMode = () => {
+                if (window.location.hash === '#/author') {
+                    state.authPrompt = { open: true, mode: 'author' };
+                    render();
+                }
+            };
+            window.addEventListener('hashchange', checkAuthorMode);
+            window.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.altKey && e.key === 'a') {
+                    e.preventDefault();
+                    state.authPrompt = { open: true, mode: 'author' };
+                    render();
+                }
+            });
+            checkAuthorMode(); // Check on initial load
+        }
+
+        // --- App Start ---
+        initializeAppListeners();
+        render(); // Initial render
+    </script>
+</body>
+</html>
+
