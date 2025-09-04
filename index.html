@@ -241,7 +241,8 @@
 
         function renderQuizInterface() {
             const total = state.quizItems.length;
-            const progress = (state.index / total) * 100;
+            // CORRECTED PROGRESS CALCULATION: Ensures the bar reaches 100% on the last question.
+            const progress = total > 1 ? (state.index / (total - 1)) * 100 : (state.index === 0 ? 100 : 0);
             const current = state.quizItems[state.index];
             const finished = state.selections.every(s => s !== null);
 
