@@ -91,7 +91,8 @@
     <script type="module">
         // Import necessary Firebase functions
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, addDoc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        // MODIFIED: Added query, where, and updateDoc for leaderboard logic
+        import { getFirestore, doc, setDoc, onSnapshot, collection, addDoc, getDocs, writeBatch, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
         // --- Firebase Configuration ---
@@ -370,8 +371,20 @@
             `;
         }
         
+        // MODIFIED: Renders a full leaderboard with ranks, medals, and unique player names.
         function renderLeaderboardDialog() {
             const items = [...state.leaderboardData].sort((a, b) => b.score - a.score || a.ts - b.ts);
+
+            // Process to get only the highest score for each unique player name
+            const highScores = new Map();
+            for (const entry of items) {
+                // Since the list is already sorted by score descending, the first entry we see for a name is their highest score.
+                if (!highScores.has(entry.name)) {
+                    highScores.set(entry.name, entry);
+                }
+            }
+            const uniqueItems = Array.from(highScores.values()).slice(0, 3);
+
             return `
                 <div id="lb-dialog" class="dialog-backdrop">
                     <div class="bg-white rounded-2xl shadow-xl w-full max-w-md m-4">
@@ -379,13 +392,15 @@
                             <h2 class="text-2xl font-bold">🏆 Leaderboard</h2>
                         </div>
                         <div class="p-4 max-h-[60vh] overflow-y-auto leaderboard-list">
-                            ${items.length === 0 ? '<p class="text-center py-8">No entries yet. Be the first!</p>' : ''}
+                            ${uniqueItems.length === 0 ? '<p class="text-center py-8">No entries yet. Be the first!</p>' : ''}
                             <ul class="divide-y">
-                                ${items.slice(0, 3).map(r => `
-                                    <li class="py-3 flex justify-center items-center">
-                                        <span class="font-semibold text-lg">${r.name || 'Anonymous'}</span>
-                                    </li>
-                                `).join('')}
+                                ${uniqueItems.map((r) => {
+                                    return `
+                                        <li class="py-3 flex justify-center items-center text-lg">
+                                            <span class="font-semibold">${r.name || 'Anonymous'}</span>
+                                        </li>
+                                    `;
+                                }).join('')}
                             </ul>
                         </div>
                          <div class="p-4 text-right border-t">
@@ -610,17 +625,58 @@
             }
         }
 
+        // MODIFIED: Checks for existing scores before adding a new one. Updates if the new score is higher.
         async function submitToLeaderboard() {
             if (!state.user) return;
             const finalScore = state.selections.reduce((acc, sel, qi) => acc + (state.quizItems[qi]?.answerIndex === sel ? 1 : 0), 0);
-            await addDoc(collection(db, "leaderboard"), {
-                name: state.playerName || "Anonymous",
-                score: finalScore,
-                total: state.quizItems.length,
-                ts: Date.now(),
-                userId: state.user.uid,
-            });
-            showSnackbar("Submitted to leaderboard!", "success");
+            const playerName = state.playerName.trim() || "Anonymous";
+
+            // "Anonymous" players can have duplicate entries.
+            if (playerName === "Anonymous") {
+                await addDoc(collection(db, "leaderboard"), {
+                    name: "Anonymous",
+                    score: finalScore,
+                    total: state.quizItems.length,
+                    ts: Date.now(),
+                    userId: state.user.uid,
+                });
+                showSnackbar("Submitted to leaderboard!", "success");
+                return;
+            }
+
+            // For named players, check for an existing high score.
+            const leaderboardColRef = collection(db, "leaderboard");
+            const q = query(leaderboardColRef, where("name", "==", playerName));
+            const querySnapshot = await getDocs(q);
+
+            if (querySnapshot.empty) {
+                // No existing entry for this name, so add a new one.
+                await addDoc(leaderboardColRef, {
+                    name: playerName,
+                    score: finalScore,
+                    total: state.quizItems.length,
+                    ts: Date.now(),
+                    userId: state.user.uid,
+                });
+                showSnackbar("Your score has been submitted!", "success");
+            } else {
+                // An entry for this name already exists.
+                const existingDoc = querySnapshot.docs[0];
+                const existingData = existingDoc.data();
+
+                if (finalScore > existingData.score) {
+                    // The new score is higher, so update the existing document.
+                    const docRef = doc(db, "leaderboard", existingDoc.id);
+                    await updateDoc(docRef, {
+                        score: finalScore,
+                        ts: Date.now() // Also update the timestamp
+                    });
+                    showSnackbar("Congratulations! You've set a new high score!", "success");
+                } else {
+                    // The new score is not higher than the existing one.
+                    showSnackbar("You didn't beat your high score this time.", "info");
+                }
+            }
         }
         
         function fireConfetti() {
