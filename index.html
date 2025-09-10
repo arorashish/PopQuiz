@@ -416,7 +416,7 @@
                 <div id="score-dialog" class="dialog-backdrop">
                     <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm m-4 p-8 text-center">
                         <h2 class="text-2xl font-bold mb-2">Quiz Complete!</h2>
-                        <p>Thank you for participating.</p>
+                        <p>Thank you for participating, you may close the browser now.</p>
                         <button id="close-score-btn" class="mt-6 font-bold py-2 px-6 rounded-xl bg-gray-800 text-white hover:bg-gray-700 transition">Close</button>
                     </div>
                 </div>
@@ -615,6 +615,10 @@
         function handleFinish() {
             const finished = state.selections.every(s => s !== null);
             if (finished) {
+                // Disable the finish button to prevent multiple submissions
+                const finishBtn = document.getElementById('finish-btn');
+                if (finishBtn) finishBtn.disabled = true;
+
                 submitToLeaderboard();
                 state.confettiFire = true;
                 fireConfetti();
@@ -674,7 +678,7 @@
                     showSnackbar("Congratulations! You've set a new high score!", "success");
                 } else {
                     // The new score is not higher than the existing one.
-                    showSnackbar("You didn't beat your high score this time.", "info");
+                    // Message removed as per user request. The "Quiz Complete" dialog will still show.
                 }
             }
         }
